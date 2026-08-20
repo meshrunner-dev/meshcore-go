@@ -1,0 +1,78 @@
+# Release build for the cmd/ tools. Driven by the manually-triggered
+# .github/workflows/release.yml; `goreleaser release --snapshot --clean`
+# reproduces it locally without publishing.
+version: 2
+
+project_name: meshcore-go
+
+before:
+  hooks:
+    - go mod download
+
+builds:
+  - id: meshkey
+    main: ./cmd/meshkey
+    binary: meshkey
+    env:
+      - CGO_ENABLED=0 # static binaries: no libc to match on the target
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+    goos: [linux, darwin, windows]
+    goarch: ["386", amd64, arm64, arm]
+    # armv7 covers the Cortex-A7 boards (RK3506B and friends); armv6 is
+    # the fallback for older ARM without VFPv3.
+    goarm: ["6", "7"]
+    ignore:
+      - goos: darwin
+        goarch: "386"
+      - goos: darwin
+        goarch: arm
+      - goos: windows
+        goarch: arm
+      - goos: windows
+        goarch: arm64
+
+  - id: meshmon
+    main: ./cmd/meshmon
+    binary: meshmon
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+    goos: [linux, darwin, windows]
+    goarch: ["386", amd64, arm64, arm]
+    goarm: ["6", "7"]
+    ignore:
+      - goos: darwin
+        goarch: "386"
+      - goos: darwin
+        goarch: arm
+      - goos: windows
+        goarch: arm
+      - goos: windows
+        goarch: arm64
+
+# One archive per platform, carrying both tools.
+archives:
+  - formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - README.md
+      - LICENSE
+
+checksum:
+  name_template: checksums.txt
+
+release:
+  draft: false
+  prerelease: auto
+  footer: |
+    Archives contain both command-line tools, `meshkey` and `meshmon`.
+    On ARM boards pick `armv7` for Cortex-A7 and newer (RK3506B, Raspberry Pi 2+),
+    `armv6` for older cores, `arm64` for 64-bit ARM.

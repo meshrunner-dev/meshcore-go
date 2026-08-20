@@ -1,0 +1,5 @@
+goldengen-*
+third_party/
+*.gcno
+*.gcda
+*.gcov

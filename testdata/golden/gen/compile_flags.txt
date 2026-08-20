@@ -1,0 +1,6 @@
+-std=c++17
+-Ishim
+-Ithird_party/arduinolibs/libraries/Crypto
+-Ithird_party/meshcore-current/src
+-Ithird_party/meshcore-current/lib/ed25519
+-DMESHCORE_MINOR=17

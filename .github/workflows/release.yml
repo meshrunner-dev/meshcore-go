@@ -1,0 +1,57 @@
+# Manually-triggered release: builds the cmd/ tools for every supported
+# platform from a chosen tag and publishes them as release artifacts.
+#
+# The tag is an input rather than a push trigger, so releasing stays a
+# deliberate act — and so a tag can be (re)released without moving it.
+name: release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release, e.g. v1.0.0"
+        required: true
+        type: string
+      dry_run:
+        description: "Build the artifacts without publishing a release"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write # create the release and upload its assets
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0 # goreleaser needs the tags and full history
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Verify the tree before releasing
+        run: go test ./...
+
+      - name: Build and publish with goreleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: "~> v2"
+          args: release --clean ${{ inputs.dry_run && '--snapshot' || '' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload artifacts (dry run only)
+        if: ${{ inputs.dry_run }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ inputs.tag }}
+          path: dist/*
+          retention-days: 7

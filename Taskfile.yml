@@ -1,0 +1,124 @@
+version: '3'
+
+vars:
+  MESHCORE_REPO: https://github.com/meshcore-dev/MeshCore
+
+tasks:
+  # MeshCore has no repo-wide release tags — the per-app tags
+  # (repeater-vX.Y.Z, companion-vX.Y.Z, …) share the same source tree
+  # and version numbers, so repeater-v{VERSION} is fetched as the
+  # canonical source for protocol version {VERSION}.
+  golden:fetch:
+    internal: true
+    dir: testdata/golden/gen
+    requires:
+      vars: [VERSION]
+    status:
+      - test -d "third_party/meshcore-{{.VERSION}}"
+    cmds:
+      - mkdir -p third_party
+      - curl -fsSL "{{.MESHCORE_REPO}}/archive/refs/tags/repeater-v{{.VERSION}}.tar.gz" | tar -xz -C third_party
+      - mv "third_party/MeshCore-repeater-v{{.VERSION}}" "third_party/meshcore-{{.VERSION}}"
+
+  golden:
+    desc: 'Generate one golden corpus: task golden VERSION=1.17.1 [SEED=42]'
+    dir: testdata/golden/gen
+    requires:
+      vars: [VERSION]
+    deps:
+      - task: golden:fetch
+        vars: {VERSION: '{{.VERSION}}'}
+    cmds:
+      # meshcore-current feeds compile_flags.txt so clangd-based IDEs
+      # (Zed, VS Code+clangd, Neovim…) resolve the reference includes.
+      - ln -sfn "meshcore-{{.VERSION}}" third_party/meshcore-current
+      - make corpus MESHCORE="third_party/meshcore-{{.VERSION}}" VERSION="{{.VERSION}}" SEED="{{.SEED | default "42"}}"
+
+  golden:coverage:
+    desc: 'Branch coverage of the reference sources during generation: task golden:coverage VERSION=1.17.1'
+    dir: testdata/golden/gen
+    requires:
+      vars: [VERSION]
+    deps:
+      - task: golden:fetch
+        vars: {VERSION: '{{.VERSION}}'}
+    cmds:
+      - make coverage MESHCORE="third_party/meshcore-{{.VERSION}}" VERSION="{{.VERSION}}" SEED="{{.SEED | default "42"}}"
+
+  golden:verify:
+    desc: Regenerate the whole matrix and fail on any drift from the committed corpora
+    cmds:
+      - task: golden:all
+      - |
+        drift="$(git status --porcelain -- testdata/golden)"
+        if [ -n "$drift" ]; then
+          echo "golden corpora drift from the generator output:"
+          echo "$drift"
+          git --no-pager diff --stat -- testdata/golden
+          exit 1
+        fi
+
+  golden:all:
+    desc: Regenerate the whole supported corpus matrix
+    cmds:
+      - for:
+          matrix:
+            VERSION: ['1.14.1', '1.15.0', '1.16.0', '1.17.1']
+            SEED: ['42', '535', '1989']
+        task: golden
+        vars:
+          VERSION: '{{.ITEM.VERSION}}'
+          SEED: '{{.ITEM.SEED}}'
+
+  test:
+    desc: Run the whole Go test suite (replays all corpora)
+    cmds:
+      - go test ./...
+
+  test:golden:
+    desc: Replay only the golden corpora, with per-file detail
+    cmds:
+      - go test -run TestGoldenVectors -v ./...
+
+  test:mqtt:
+    desc: Replay only the MQTT field captures, with per-file detail
+    cmds:
+      - go test -run TestMQTTCorpus -v ./...
+
+  test:fuzz:
+    desc: 'Short fuzz pass over the wire parsers ({{.FUZZTIME}} per target); raise FUZZTIME for a long run'
+    vars:
+      FUZZTIME: '{{.FUZZTIME | default "20s"}}'
+    cmds:
+      - for: ['FuzzParsePacket', 'FuzzParseAdvertData', 'FuzzMACThenDecrypt']
+        cmd: go test -run '^$' -fuzz '^{{.ITEM}}$' -fuzztime {{.FUZZTIME}} .
+
+  build:
+    desc: Build the cmd/ tools into ./bin
+    cmds:
+      - go build -o bin/ ./cmd/...
+
+  release:snapshot:
+    desc: Build the release artifacts locally without publishing (goreleaser)
+    cmds:
+      - go run github.com/goreleaser/goreleaser/v2@v2.17.1 release --snapshot --clean
+
+  lint:
+    desc: Run golangci-lint (strict baseline in .golangci.yml; wraps vet and staticcheck)
+    cmds:
+      - go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.0 run
+
+  check:
+    desc: 'Full gate: formatting, tidy, lint, govulncheck, race tests'
+    cmds:
+      - |
+        unformatted="$(gofmt -l .)"
+        if [ -n "$unformatted" ]; then
+          echo "gofmt — files need formatting:"
+          echo "$unformatted"
+          exit 1
+        fi
+      - go mod tidy -diff
+      - task: lint
+      - go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+      - go test -race ./...

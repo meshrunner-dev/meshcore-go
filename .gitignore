@@ -1,0 +1,17 @@
+# Binaries and test artifacts
+/bin/
+/dist/
+*.test
+*.out
+coverage.*
+
+# `go build ./cmd/<name>` without -o drops the binary here at the module
+# root (named after the package dir). Builds should go to ./bin via
+# `task build`; these guard against the stray-at-root accident.
+/meshkey
+/meshmon
+
+# Editor droppings
+*.swp
+.idea/
+.vscode/

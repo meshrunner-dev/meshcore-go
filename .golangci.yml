@@ -1,0 +1,93 @@
+# Strict baseline: everything on, then a curated list of exceptions —
+# each disable is either pure style noise or a rule that fights the
+# nature of this repo (a wire-protocol library with heavy test vectors).
+version: "2"
+
+linters:
+  default: all
+  disable:
+    # Style opinions with no defect-finding value.
+    - nlreturn
+    - wsl
+    - wsl_v5
+    - varnamelen
+    - ireturn
+    # Require a curated import allowlist; overkill for two dependencies.
+    - depguard
+    - gomodguard
+    - gomodguard_v2
+    # Demand every struct literal list all fields; zero values are
+    # idiomatic Go and kill readable tests.
+    - exhaustruct
+    - exhaustruct_v5
+    # `if err := f(); err != nil` is the language's own idiom.
+    - noinlineerr
+    # Protocol code is legitimately full of sizes and offsets.
+    - mnd
+    # Same-package tests are deliberate: they exercise unexported logic.
+    - testpackage
+    # A protocol library returns its own sentinel errors; wrapping every
+    # stdlib error would bloat the API surface.
+    - wrapcheck
+    # Tests are table-driven and sequential on purpose.
+    - paralleltest
+    # The wire format dictates snake_case JSON tags.
+    - tagliatelle
+
+  settings:
+    exhaustive:
+      # Wire-facing switches whitelist valid values and reject the rest
+      # in default; forcing every enum case would obscure that intent.
+      default-signifies-exhaustive: true
+    gosec:
+      excludes:
+        # G115 (integer truncation): a wire codec truncates by design —
+        # every conversion here is masked or bounds-checked, and the
+        # 4-byte protocol timestamp is the reference's own choice.
+        - G115
+    cyclop:
+      max-complexity: 20
+    gocognit:
+      min-complexity: 25
+    gocyclo:
+      min-complexity: 20
+    lll:
+      line-length: 120
+    revive:
+      rules:
+        - name: exported
+          disabled: false
+
+  exclusions:
+    rules:
+      # CLI declaration tags (kong) carry inline help texts that cannot
+      # wrap; their alignment is tagalign's job, their length inherent.
+      - linters: [lll]
+        source: '`.*(cmd|arg|help|enum|placeholder):'
+
+      # cmd/ tools are CLIs: printing to stdout is their purpose.
+      - path: ^cmd/
+        linters:
+          - forbidigo
+
+      # Test files: hex/byte vector tables trip length and duplication
+      # linters, shared vectors live in package-level variables, and
+      # error paths are asserted, not propagated.
+      - path: _test\.go
+        linters:
+          - gosec
+          - dupl
+          - funlen
+          - gochecknoglobals
+          - goconst
+          - lll
+          - maintidx
+          - err113
+          - errcheck
+          - cyclop
+          - gocognit
+          - gocyclo
+
+formatters:
+  enable:
+    - gofmt
