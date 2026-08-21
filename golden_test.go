@@ -2,6 +2,7 @@ package meshcore
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"path/filepath"
@@ -35,6 +36,7 @@ type goldenRecord struct {
 	Extra     string `json:"extra"`
 
 	// channel fields.
+	Crc string `json:"crc"`
 	PSK string `json:"psk"`
 
 	// advert_appdata fields — the reference parser's own reading.
@@ -219,6 +221,11 @@ func runGolden(t *testing.T, n int, rec *goldenRecord) {
 				n, pr, rec.PathLen, rec.Path, rec.ExtraType, rec.Extra)
 		}
 
+	case "ack_crc":
+		got := AckCRC(h("message", rec.Message), h("pub", rec.Pub))
+		if want := binary.LittleEndian.Uint32(h("crc", rec.Crc)); got != want {
+			t.Errorf("record %d: ack CRC = %08x, reference says %08x", n, got, want)
+		}
 	case "channel":
 		ch, err := NewGroupChannel(h("psk", rec.PSK))
 		if err != nil {

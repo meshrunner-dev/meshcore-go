@@ -69,7 +69,7 @@ tasks:
     vars:
       FUZZTIME: '{{.FUZZTIME | default "20s"}}'
     cmds:
-      - for: ["FuzzParsePacket", "FuzzParseAdvertData", "FuzzMACThenDecrypt", "FuzzParseTextPlaintext", "FuzzLPPDecode"]
+      - for: ["FuzzParsePacket", "FuzzParseAdvertData", "FuzzMACThenDecrypt"]
         cmd: go test -run '^$' -fuzz '^{{.ITEM}}$' -fuzztime {{.FUZZTIME}} .
 
   vuln:

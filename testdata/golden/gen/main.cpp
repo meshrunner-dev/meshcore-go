@@ -595,6 +595,40 @@ static void gen_adverts(const std::vector<LocalIdentity>& ids) {
 
 // ----------------------------------------------------------------------
 
+// ---- ack CRC --------------------------------------------------------
+
+// The expected-ACK hash a text message carries, exactly as
+// BaseChatMesh::composeMsgPacket computes it: sha256 over the message
+// head (timestamp, flags, text) concatenated with the sender's public
+// key, truncated to 4 bytes. No chat-app dependency — just the same
+// Utils::sha256 the firmware calls.
+static void gen_ack_crc(const std::vector<LocalIdentity>& ids) {
+  struct AckCase { uint32_t ts; uint8_t flags; const char* text; };
+  static const AckCase CASES[] = {
+    {0x11223344u, 0x00, "hello"},
+    {1700000000u, (uint8_t)(1 << 2), "get status"},
+    {1700000001u, 0x01, "retry"},
+    {7u, 0x00, ""},
+  };
+  size_t i = 0;
+  for (const AckCase& c : CASES) {
+    const LocalIdentity& id = ids[(i++) % ids.size()];
+    uint8_t temp[5 + 160];
+    memcpy(temp, &c.ts, 4);
+    temp[4] = c.flags;
+    int text_len = (int)strlen(c.text);
+    memcpy(&temp[5], c.text, (size_t)text_len);
+    int msg_len = 5 + text_len;
+    uint8_t crc[4];
+    Utils::sha256(crc, 4, temp, msg_len, (const uint8_t*)id.pub_key, PUB_KEY_SIZE);
+    open_rec("ack_crc");
+    field_hex("message", temp, msg_len);
+    field_hex("pub", id.pub_key, PUB_KEY_SIZE);
+    field_hex("crc", crc, 4);
+    close_rec();
+  }
+}
+
 int main(int argc, char** argv) {
   unsigned seed = 42;
   if (argc > 1) seed = (unsigned)strtoul(argv[1], nullptr, 10);
@@ -611,5 +645,6 @@ int main(int argc, char** argv) {
   gen_adverts(ids);
   gen_path_returns(ids);
   gen_channels();
+  gen_ack_crc(ids);
   return 0;
 }
