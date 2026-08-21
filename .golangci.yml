@@ -45,6 +45,10 @@ linters:
         # every conversion here is masked or bounds-checked, and the
         # 4-byte protocol timestamp is the reference's own choice.
         - G115
+        # G602 (slice bounds): the LPP decoder sub-slices a payload whose
+        # length lppWidth already guaranteed; gosec can't see across the
+        # call.
+        - G602
     cyclop:
       max-complexity: 20
     gocognit:

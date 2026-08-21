@@ -1,7 +1,10 @@
 // Package meshcore implements the MeshCore mesh protocol: packet
 // encoding and decoding, node identities, path handling, routing
-// types and deduplication rules. It contains protocol primitives
-// only — no radio drivers, no transport, no application logic.
+// types, deduplication rules, the text, group and admin payload
+// codecs, node discovery, and Cayenne LPP sensor telemetry. It
+// contains protocol primitives only — stateless codecs, no radio
+// drivers, no transport, and no stateful application logic (a node's
+// seen-packet cache, for one, belongs to the node, not here).
 //
 // This is an independent implementation. It is not affiliated with
 // or endorsed by the MeshCore project.
